@@ -74,6 +74,9 @@ shocks = pd.DataFrame({
     'residuals': residuals.values
 })
 
+quarterly_2020_dates = pd.to_datetime(['2020-03-01', '2020-06-01', '2020-09-01', '2020-12-01'])
+shocks.loc[shocks['date'].isin(quarterly_2020_dates), 'residuals'] = 0
+
 # Save to CSV
 shocks.to_csv('shocks.csv', index=False)
 
