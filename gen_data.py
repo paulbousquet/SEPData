@@ -86,7 +86,7 @@ for vintage_date in sorted(all_vintage_dates):
             )   
             
             # Get values for 0, 1, and 2 year differences
-            for diff in [0, 1, 2]:
+            for diff in [0, 1, 2, 3]:
                 matching = vintage_data[vintage_data['year_diff'] == diff]
                 if not matching.empty:
                     # Take the last observation if multiple exist
@@ -101,7 +101,7 @@ combined_df = pd.DataFrame(combined_rows)
 # Ensure all columns exist (fill missing with NaN)
 expected_cols = ['date']
 for series_id in series_ids:
-    for diff in [0, 1, 2]:
+    for diff in [0, 1, 2, 3]:
         expected_cols.append(f'{series_id}{diff}')
 
 for col in expected_cols:
