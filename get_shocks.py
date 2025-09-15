@@ -73,10 +73,14 @@ shocks = pd.DataFrame({
     'date': processed_df.loc[regression_data.index, 'date'],
     'residuals': residuals.values
 })
+new_rows = pd.DataFrame({
+    'date': pd.to_datetime(['2020-03-01', '2020-06-01', '2020-09-01', '2020-12-01']),
+    'residuals': 0
+})
 
-quarterly_2020_dates = pd.to_datetime(['2020-03-01', '2020-06-01', '2020-09-01', '2020-12-01'])
-shocks.loc[shocks['date'].isin(quarterly_2020_dates), 'residuals'] = 0
+# Concatenate with existing data and sort
+shocks = pd.concat([shocks, new_rows], ignore_index=True)
+shocks = shocks.sort_values('date').reset_index(drop=True)
 
-# Save to CSV
 shocks.to_csv('shocks.csv', index=False)
 
