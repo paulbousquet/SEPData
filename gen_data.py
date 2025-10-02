@@ -46,8 +46,8 @@ def get_all_vintages(series_id, api_key):
     return pd.DataFrame(all_data)
 
 # Configuration
-api_key = "API_KEY_HERE"
-series_ids = ["UNRATEMD", "GDPC1MD", "PCECTPIMD"]
+api_key = "a6451fba250b1d475e3bad1195875b1f"
+series_ids = ["UNRATEMD", "GDPC1MD", "PCECTPIMD","FEDTARMD"]
 
 # Collect all data
 all_series_data = {}
@@ -111,8 +111,14 @@ for col in expected_cols:
 # Reorder columns
 df = combined_df[expected_cols]
 
+# From FRED Technical Team: when all SEP values are unchanged
+# no vintage for that variable and that SEP date
+for col in df.columns:
+    if col.endswith(('0', '1', '2')):
+        df[col] = df[col].ffill()
+
 # Load SEP2015.csv
-# This will extend the data and correct two errors from FRED 
+# This will extend the data 
 sep2015_url = 'https://raw.githubusercontent.com/paulbousquet/SEPData/main/SEP2015.csv'
 sep2015_df = pd.read_csv(sep2015_url)
 sep2015_df['date'] = pd.to_datetime(sep2015_df['date'])
