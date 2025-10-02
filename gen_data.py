@@ -46,7 +46,7 @@ def get_all_vintages(series_id, api_key):
     return pd.DataFrame(all_data)
 
 # Configuration
-api_key = "a6451fba250b1d475e3bad1195875b1f"
+api_key = "YOUR_API_KEY"
 series_ids = ["UNRATEMD", "GDPC1MD", "PCECTPIMD","FEDTARMD"]
 
 # Collect all data
