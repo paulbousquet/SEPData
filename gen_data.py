@@ -1,121 +1,86 @@
 import requests
 import pandas as pd
 import numpy as np
+import time
 import pandas_datareader.data as web
 from datetime import datetime
 
-def get_all_vintages(series_id, api_key):
-    """Pull all available vintages for a FRED series"""
-    vintage_url = "https://api.stlouisfed.org/fred/series/vintagedates"
-    vintage_params = {
-        'series_id': series_id,
-        'api_key': api_key,
-        'file_type': 'json'
-    }
+def fetch_series_data(series_id, api_key):
+    """Fetch all vintage data for a FRED series"""
+    # Get vintage dates
+    vintage_resp = requests.get(
+        "https://api.stlouisfed.org/fred/series/vintagedates",
+        params={'series_id': series_id, 'api_key': api_key, 'file_type': 'json'}
+    )
+    vintages = vintage_resp.json()['vintage_dates']
     
-    vintage_response = requests.get(vintage_url, params=vintage_params)
-    response_data = vintage_response.json()
-    
-    if 'vintage_dates' not in response_data:
-        return pd.DataFrame()
-    
-    vintage_dates = response_data['vintage_dates']
-    all_data = []
-    
-    obs_url = "https://api.stlouisfed.org/fred/series/observations"
-    
-    for vintage_date in vintage_dates:
-        params = {
-            'series_id': series_id,
-            'api_key': api_key,
-            'file_type': 'json',
-            'vintage_dates': vintage_date
-        }
-        
-        response = requests.get(obs_url, params=params)
-        data = response.json()
-        
-        if 'observations' in data:
-            for obs in data['observations']:
-                all_data.append({
-                    'date': obs['date'],
-                    'value': obs['value'],
-                    'vintage_date': vintage_date
+    # Fetch observations for each vintage
+    records = []
+    for vintage in vintages:
+        obs_resp = requests.get(
+            "https://api.stlouisfed.org/fred/series/observations",
+            params={
+                'series_id': series_id,
+                'api_key': api_key,
+                'file_type': 'json',
+                'vintage_dates': vintage
+            }
+        )
+        for obs in obs_resp.json()['observations']:
+            if obs['value'] != '.':
+                records.append({
+                    'vintage': pd.Timestamp(vintage),
+                    'obs_date': pd.Timestamp(obs['date']),
+                    'value': float(obs['value'])
                 })
     
-    return pd.DataFrame(all_data)
+    return pd.DataFrame(records)
 
-# Configuration
-api_key = "YOUR_API_KEY"
-series_ids = ["UNRATEMD", "GDPC1MD", "PCECTPIMD","FEDTARMD"]
+# Fetch data
+api_key = "API_KEY_HERE"
+series_ids = ["UNRATEMD", "GDPC1MD", "PCECTPIMD", "FEDTARMD"]
 
-# Collect all data
-all_series_data = {}
-for series_id in series_ids:
-    print(f"Fetching {series_id}...")
-    df = get_all_vintages(series_id, api_key)
-    df['value'] = pd.to_numeric(df['value'], errors='coerce')
-    df['date'] = pd.to_datetime(df['date'])
-    df['vintage_date'] = pd.to_datetime(df['vintage_date'])
-    df = df.dropna(subset=['value'])
-    all_series_data[series_id] = df
+data = {}
+for i, sid in enumerate(series_ids):
+    print(f"Fetching {sid}...")
+    data[sid] = fetch_series_data(sid, api_key)
+    if i < len(series_ids) - 1:
+        time.sleep(11)
 
-# Merge into combined dataset
-combined_rows = []
+# Build output dataframe
+all_vintages = sorted(set().union(*[set(df['vintage']) for df in data.values()]))
+rows = []
 
-# Get unique vintage dates across all series
-all_vintage_dates = set()
-for df in all_series_data.values():
-    all_vintage_dates.update(df['vintage_date'].unique())
-
-for vintage_date in sorted(all_vintage_dates):
-    # Change vintage_date to first day of month
-    first_of_month = vintage_date.replace(day=1)
-    row = {'date': first_of_month}
+for vintage in all_vintages:
+    row = {'date': vintage.replace(day=1)}
     
-    for series_id in series_ids:
-        df = all_series_data[series_id]
+    for sid in series_ids:
+        df = data[sid]
+        vintage_obs = df[df['vintage'] == vintage]
         
-        # Filter to this vintage
-        vintage_data = df[df['vintage_date'] == vintage_date].copy()
-        
-        if not vintage_data.empty:
-            vintage_data['year_diff'] = (
-                vintage_data['date'].dt.year - 
-                vintage_data['vintage_date'].dt.year
-            )   
+        if not vintage_obs.empty:
+            vintage_obs = vintage_obs.copy()
+            vintage_obs['year_ahead'] = vintage_obs['obs_date'].dt.year - vintage.year
             
-            # Get values for 0, 1, and 2 year differences
-            for diff in [0, 1, 2, 3]:
-                matching = vintage_data[vintage_data['year_diff'] == diff]
-                if not matching.empty:
-                    # Take the last observation if multiple exist
-                    value = matching.iloc[-1]['value']
-                    row[f'{series_id}{diff}'] = value
+            for ahead in [0, 1, 2, 3]:
+                match = vintage_obs[vintage_obs['year_ahead'] == ahead]
+                if not match.empty:
+                    row[f'{sid}{ahead}'] = match.iloc[-1]['value']
     
-    combined_rows.append(row)
+    rows.append(row)
 
-# Create final dataframe
-combined_df = pd.DataFrame(combined_rows)
+df = pd.DataFrame(rows)
 
-# Ensure all columns exist (fill missing with NaN)
-expected_cols = ['date']
-for series_id in series_ids:
-    for diff in [0, 1, 2, 3]:
-        expected_cols.append(f'{series_id}{diff}')
-
-for col in expected_cols:
-    if col not in combined_df.columns:
-        combined_df[col] = np.nan
-
-# Reorder columns
-df = combined_df[expected_cols]
-
-# From FRED Technical Team: when all SEP values are unchanged
-# no vintage for that variable and that SEP date
-for col in df.columns:
-    if col.endswith(('0', '1', '2')):
-        df[col] = df[col].ffill()
+# Fill missing columns
+for sid in series_ids:
+    for ahead in [0, 1, 2, 3]:
+        col = f'{sid}{ahead}'
+        if col not in df.columns:
+            df[col] = np.nan
+df = df.ffill()
+# make sure didn't fill where we shouldn't 
+df['date'] = pd.to_datetime(df['date'])
+df.loc[df['date'].dt.month.isin([3, 6]), df.columns[df.columns.str.endswith('3')]] = np.nan
 
 # Load SEP2015.csv
 # This will extend the data 
