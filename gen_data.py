@@ -131,7 +131,7 @@ final_df = pd.concat([df_no_overlap, sep2015_df], ignore_index=True)
 
 final_df = final_df.sort_values('date').reset_index(drop=True)
 
-df = web.get_data_fred('DFEDTARU', start='2014-01-01', end=datetime.now())
+df = web.get_data_fred('DFEDTARU', start='2011-01-01', end=datetime.now())
 
 # Aggregate to quarterly using end of period values
 quarterly = df.resample('Q').last()
@@ -149,7 +149,7 @@ quarterly = quarterly.set_index('DATE')
 quarterly['DFFR'] = quarterly['DFEDTARU'].diff()
 
 # Import FEDTARMDLR
-fedtarmdlr = web.get_data_fred('FEDTARMDLR', start='2015-01-01', end=datetime.now())
+fedtarmdlr = web.get_data_fred('FEDTARMDLR', start='2011-01-01', end=datetime.now())
 
 # Change date to first day of month
 fedtarmdlr.index = fedtarmdlr.index.to_period('M').to_timestamp()
@@ -168,5 +168,5 @@ final_df = final_df.merge(
     right_on='DATE',
     how='left'
 ).drop('DATE', axis=1)
-
+final_df['DFFR'] = final_df['DFFR'].fillna(0)
 final_df.to_csv('SEP_full.csv', index=False)
