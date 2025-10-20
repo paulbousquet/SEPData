@@ -5,43 +5,36 @@ import pandas_datareader.data as web
 from datetime import datetime
 
 def get_all_vintages(series_id, api_key):
-    """Pull all available vintages for a FRED series"""
-    vintage_url = "https://api.stlouisfed.org/fred/series/vintagedates"
-    vintage_params = {
+    """Pull all available vintages for a FRED series in one call"""
+    obs_url = "https://api.stlouisfed.org/fred/series/observations"
+    params = {
         'series_id': series_id,
         'api_key': api_key,
-        'file_type': 'json'
+        'file_type': 'json',
+        'realtime_start': '1776-07-04',
+        'realtime_end': '9999-12-31'
     }
     
-    vintage_response = requests.get(vintage_url, params=vintage_params)
-    response_data = vintage_response.json()
+    response = requests.get(obs_url, params=params)
     
-    if 'vintage_dates' not in response_data:
+    if response.status_code != 200:
+        print(f"Error: {response.status_code}")
+        print(response.text)
         return pd.DataFrame()
     
-    vintage_dates = response_data['vintage_dates']
+    data = response.json()
+    
+    if 'observations' not in data:
+        print(f"No observations. Response: {data}")
+        return pd.DataFrame()
+    
     all_data = []
-    
-    obs_url = "https://api.stlouisfed.org/fred/series/observations"
-    
-    for vintage_date in vintage_dates:
-        params = {
-            'series_id': series_id,
-            'api_key': api_key,
-            'file_type': 'json',
-            'vintage_dates': vintage_date
-        }
-        
-        response = requests.get(obs_url, params=params)
-        data = response.json()
-        
-        if 'observations' in data:
-            for obs in data['observations']:
-                all_data.append({
-                    'date': obs['date'],
-                    'value': obs['value'],
-                    'vintage_date': vintage_date
-                })
+    for obs in data['observations']:
+        all_data.append({
+            'date': obs['date'],
+            'value': obs['value'],
+            'vintage_date': obs['realtime_start']
+        })
     
     return pd.DataFrame(all_data)
 
